@@ -42,11 +42,13 @@ def test_swap_is_blocked():
     assert path is not None and len(path) > 2
 
 
-def _no_collisions(paths):
-    horizon = max(len(p) for p in paths.values()) + 1
+def _no_collisions(paths, short_stop=(), dwell=1):
+    """Check a set of planned paths. Robots in short_stop leave their goal `dwell` steps after
+    arriving (pickup/drop-off), so they stop counting after that. Everyone else stays forever."""
+    horizon = max(len(p) for p in paths.values()) + 2
     at = lambda p, t: p[min(t, len(p) - 1)]            # after the end, a robot stays at its goal
-    ids = list(paths)
     for t in range(horizon):
+        ids = [i for i in paths if i not in short_stop or t <= len(paths[i]) - 1 + dwell]
         cells = [at(paths[i], t) for i in ids]
         assert len(cells) == len(set(cells)), f"same cell at t={t}"
         for a in ids:
@@ -67,7 +69,7 @@ def test_prioritized_crossing_robots_do_not_collide():
     assert set(paths) == {0, 1, 2}
     for r, g in zip(robots, goals):
         assert paths[r.id][-1] == g
-    _no_collisions(paths)
+    _no_collisions(paths, short_stop={0, 1, 2})
 
 
 def test_robot_on_someones_goal_moves_aside():
@@ -87,4 +89,4 @@ def test_robot_on_someones_goal_moves_aside():
     assert paths, "everyone stuck: the old deadlock is back"
     moving = [rid for rid, p in paths.items() if len(set(p)) > 1]
     assert moving, "nobody actually moves"
-    _no_collisions(paths)
+    _no_collisions(paths, short_stop={0, 1, 2})   # all three are heading to pickups/drop-offs

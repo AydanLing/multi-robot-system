@@ -28,12 +28,13 @@ def run(planner, args, world):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--map", default="maps/small_warehouse.txt")
+    parser.add_argument("--map", default="maps/warehouse_parking.txt")
     parser.add_argument("--robots", type=int, default=3)
     parser.add_argument("--steps", type=int, default=60)
     parser.add_argument("--rate", type=float, default=0.3)
     parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--parking", action="store_true", help="idle robots drive to P cells")
+    parser.add_argument("--no-parking", dest="parking", action="store_false",
+                        help="idle robots stay where they stop (needs a map without enough P cells)")
     parser.add_argument("--compare", action="store_true", help="show plain A* next to space-time A*")
     parser.add_argument("--save", help="save a GIF to this path instead of opening a window")
     args = parser.parse_args()

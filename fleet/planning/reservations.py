@@ -30,13 +30,28 @@ class ReservationTable:
         """Someone occupies this cell from time t onwards."""
         self.parked[cell] = t
 
-    def reserve_path(self, path: list[Cell], start_t: int) -> None:
-        """Book every cell and move in a path. path[i] is the cell at time start_t + i."""
+    def can_visit(self, cell: Cell, t: int, dwell: int) -> bool:
+        """Can a robot arrive here at time t and stay for `dwell` more steps (then leave)?"""
+        return all(self.is_free(cell, t + k) for k in range(dwell + 1))
+
+    def reserve_path(self, path: list[Cell], start_t: int, stay: bool = True, dwell: int = 0) -> None:
+        """Book every cell and move in a path. path[i] is the cell at time start_t + i.
+
+        stay=True: the robot stays at the end of the path for good (parking).
+        stay=False: the robot stays `dwell` more steps at the end, then leaves (pickup/drop-off).
+        """
         for i, cell in enumerate(path):
             t = start_t + i
-            self.vertices.add((cell, t))
-            self.last_time[cell] = max(self.last_time.get(cell, -1), t)
+            self._book(cell, t)
             if i > 0 and path[i - 1] != cell:
                 self.edges.add((path[i - 1], cell, t - 1))
-        # When the path ends, the robot stays at its goal.
-        self.park(path[-1], start_t + len(path) - 1)
+        end_t = start_t + len(path) - 1
+        if stay:
+            self.park(path[-1], end_t)
+        else:
+            for k in range(1, dwell + 1):
+                self._book(path[-1], end_t + k)
+
+    def _book(self, cell: Cell, t: int) -> None:
+        self.vertices.add((cell, t))
+        self.last_time[cell] = max(self.last_time.get(cell, -1), t)

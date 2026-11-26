@@ -1,10 +1,11 @@
 from fleet.planning.astar import manhattan
 from fleet.planning.reservations import ReservationTable
 from fleet.planning.space_time_astar import space_time_astar
-from fleet.robot import Robot
+from fleet.robot import Robot, State
 from fleet.world import World, Cell
 
 YIELD_CANDIDATES = 10     # how many nearby cells a yielding robot tries before giving up
+DWELL = 1                 # steps a robot is assumed to stay at a pickup/drop-off before leaving
 
 
 def plan_prioritized(world: World, robots: list[Robot], t: int) -> dict[int, list[Cell]]:
@@ -47,11 +48,12 @@ def plan_prioritized(world: World, robots: list[Robot], t: int) -> dict[int, lis
             for r in robots:
                 if r.goal() is None or r.id in stuck or r.id in yielding:
                     continue
-                path = space_time_astar(world, r.pos, r.goal(), t, table)
+                stay = not _is_task_goal(r)      # pickups/drop-offs are short stops; parking is for good
+                path = space_time_astar(world, r.pos, r.goal(), t, table, stay=stay, dwell=DWELL)
                 if path is None:
                     failed = r
                     break
-                table.reserve_path(path, t)
+                table.reserve_path(path, t, stay=stay, dwell=DWELL)
                 paths[r.id] = path
 
         if failed is None:
@@ -64,6 +66,10 @@ def plan_prioritized(world: World, robots: list[Robot], t: int) -> dict[int, lis
             stuck.add(failed.id)        # can't get out of the way either: wait in place
         else:
             yielding.add(failed.id)     # standing on someone's goal: move aside
+
+
+def _is_task_goal(robot: Robot) -> bool:
+    return robot.state in (State.TO_PICKUP, State.TO_DROPOFF)
 
 
 def _plan_yield(world: World, robot: Robot, t: int, table: ReservationTable) -> list[Cell] | None:

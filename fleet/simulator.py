@@ -33,13 +33,17 @@ class Frame:
 
 class Simulator:
     def __init__(self, world: World, robots: list[Robot], tasks: TaskGenerator,
-                 allocator: Allocator, planner: Planner, parking: bool = False):
+                 allocator: Allocator, planner: Planner, parking: bool = True):
         self.world = world
         self.robots = robots
         self.tasks = tasks
         self.allocator = allocator
         self.planner = planner
         self.parking = parking    # send idle robots to parking spots?
+        if parking and len(world.parking) < len(robots):
+            raise ValueError(f"{len(robots)} robots but only {len(world.parking)} parking spots: "
+                             f"every robot needs a spot (add P cells to the map)")
+        self.replan_next = True   # replan at the next step (set whenever any robot changes state)
         self.t = 0
         self.waiting: list[Task] = []
         self.all_tasks: list[Task] = []
@@ -62,8 +66,10 @@ class Simulator:
         if self.parking:
             send_idle_robots_to_park(self.world, self.robots)
 
-        # 3. Plan: if anyone needs a plan, replan the whole fleet together
-        if any(r.goal() is not None and not r.path for r in self.robots):
+        # 3. Plan: replan the whole fleet if anyone needs a plan, or if anything changed last step
+        #    (a robot picked up, dropped off, went idle or parked: earlier plans may be out of date)
+        if self.replan_next or any(r.goal() is not None and not r.path for r in self.robots):
+            self.replan_next = False
             paths = self.planner(self.world, self.robots, t)
             for r in self.robots:
                 if r.goal() is not None:
@@ -71,9 +77,12 @@ class Simulator:
 
         # 4. Move
         old = {r.id: r.pos for r in self.robots}
+        old_states = {r.id: r.state for r in self.robots}
         for r in self.robots:
             r.step(t)
         new = {r.id: r.pos for r in self.robots}
+        if any(r.state != old_states[r.id] for r in self.robots):
+            self.replan_next = True
         for r in self.robots:
             if r.task is not None and old[r.id] == new[r.id]:
                 self.wait_steps += 1
