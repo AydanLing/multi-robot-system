@@ -68,3 +68,23 @@ def test_prioritized_crossing_robots_do_not_collide():
     for r, g in zip(robots, goals):
         assert paths[r.id][-1] == g
     _no_collisions(paths)
+
+
+def test_robot_on_someones_goal_moves_aside():
+    # The frozen situation from the parking experiment:
+    # robot 2 sits on station (7,0) and needs (2,0); robot 1 sits on (2,0) and needs (7,0).
+    from fleet.robot import State
+    w = World.from_file("maps/small_warehouse.txt")
+    r0 = Robot(id=0, pos=(3, 5))
+    r0.assign(Task(id=0, pickup=(3, 5), dropoff=(7, 0), created_at=0))
+    r0.state = State.TO_DROPOFF
+    r1 = Robot(id=1, pos=(2, 0))
+    r1.assign(Task(id=1, pickup=(2, 0), dropoff=(7, 0), created_at=0))
+    r1.state = State.TO_DROPOFF
+    r2 = Robot(id=2, pos=(7, 0))
+    r2.assign(Task(id=2, pickup=(2, 0), dropoff=(7, 9), created_at=0))
+    paths = plan_prioritized(w, [r0, r1, r2], 0)
+    assert paths, "everyone stuck: the old deadlock is back"
+    moving = [rid for rid, p in paths.items() if len(set(p)) > 1]
+    assert moving, "nobody actually moves"
+    _no_collisions(paths)

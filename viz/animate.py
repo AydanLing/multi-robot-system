@@ -5,11 +5,13 @@ from matplotlib.patches import Circle, Rectangle
 
 from fleet.robot import State
 from fleet.simulator import Frame
-from fleet.world import World, SHELF, STATION
+from fleet.world import World, SHELF, STATION, PARKING, WALL
 
 FLOOR = "#f3f2ee"
 SHELF_COLOR = "#4a4a4a"
 STATION_COLOR = "#cfe8d5"
+PARKING_COLOR = "#dfe6f2"
+WALL_COLOR = "#2b2b2b"
 PICKUP_COLOR = "#e8952f"
 COLLISION_COLOR = "#d62728"
 ROBOT_COLORS = ["#1f77b4", "#9467bd", "#2a9d8f", "#e377c2", "#8c564b",
@@ -26,10 +28,12 @@ def _draw_map(ax, world: World):
     for r in range(world.height):
         for c in range(world.width):
             ch = world.grid[r][c]
-            color = SHELF_COLOR if ch == SHELF else STATION_COLOR if ch == STATION else FLOOR
+            color = {SHELF: SHELF_COLOR, STATION: STATION_COLOR, PARKING: PARKING_COLOR, WALL: WALL_COLOR}.get(ch, FLOOR)
             ax.add_patch(Rectangle((c - 0.5, r - 0.5), 1, 1, facecolor=color, edgecolor="white", linewidth=1))
             if ch == STATION:
                 ax.text(c, r, "S", ha="center", va="center", fontsize=9, color="#2f6b3c", fontweight="bold")
+            if ch == PARKING:
+                ax.text(c, r, "P", ha="center", va="center", fontsize=9, color="#3b5998", fontweight="bold")
     ax.set_xlim(-0.5, world.width - 0.5)
     ax.set_ylim(world.height - 0.5, -0.5)      # row 0 at the top, like the map file
     ax.set_aspect("equal")

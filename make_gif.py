@@ -21,7 +21,7 @@ START_CELLS = [(0, 0), (3, 9), (6, 0), (0, 9), (3, 0)]
 def run(planner, args, world):
     robots = [Robot(id=i, pos=START_CELLS[i]) for i in range(args.robots)]
     sim = Simulator(world, robots, TaskGenerator(world, rate=args.rate, seed=args.seed),
-                    allocator=allocate_greedy, planner=planner)
+                    allocator=allocate_greedy, planner=planner, parking=args.parking)
     sim.run(args.steps)
     return sim
 
@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--steps", type=int, default=60)
     parser.add_argument("--rate", type=float, default=0.3)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--parking", action="store_true", help="idle robots drive to P cells")
     parser.add_argument("--compare", action="store_true", help="show plain A* next to space-time A*")
     parser.add_argument("--save", help="save a GIF to this path instead of opening a window")
     args = parser.parse_args()

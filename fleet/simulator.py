@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
+from fleet.allocation.parking import send_idle_robots_to_park
 from fleet.robot import Robot, State
 from fleet.tasks import Task, TaskGenerator
 from fleet.world import World, Cell
@@ -32,19 +33,20 @@ class Frame:
 
 class Simulator:
     def __init__(self, world: World, robots: list[Robot], tasks: TaskGenerator,
-                 allocator: Allocator, planner: Planner):
+                 allocator: Allocator, planner: Planner, parking: bool = False):
         self.world = world
         self.robots = robots
         self.tasks = tasks
         self.allocator = allocator
         self.planner = planner
+        self.parking = parking    # send idle robots to parking spots?
         self.t = 0
         self.waiting: list[Task] = []
         self.all_tasks: list[Task] = []
         self.vertex_collisions = 0
         self.swap_collisions = 0
-        self.frames: list[Frame] = [self._snapshot([])]
         self.wait_steps = 0       # robot-steps spent standing still while having somewhere to go
+        self.frames: list[Frame] = [self._snapshot([])]
 
     def step(self) -> Frame:
         self.t += 1
@@ -55,8 +57,10 @@ class Simulator:
         self.waiting += new_tasks
         self.all_tasks += new_tasks
 
-        # 2. Allocate
+        # 2. Allocate tasks, then send any robot still idle to a parking spot
         self.allocator(self.robots, self.waiting)
+        if self.parking:
+            send_idle_robots_to_park(self.world, self.robots)
 
         # 3. Plan: if anyone needs a plan, replan the whole fleet together
         if any(r.goal() is not None and not r.path for r in self.robots):
@@ -70,7 +74,6 @@ class Simulator:
         for r in self.robots:
             r.step(t)
         new = {r.id: r.pos for r in self.robots}
-
         for r in self.robots:
             if r.task is not None and old[r.id] == new[r.id]:
                 self.wait_steps += 1
@@ -110,9 +113,8 @@ class Simulator:
                 f"still waiting:    {len(self.waiting)}\n"
                 f"in progress:      {in_progress}\n"
                 f"same-cell steps:  {self.vertex_collisions}\n"
-                f"swaps:            {self.swap_collisions}"
-                f"waiting steps:    {self.wait_steps}"
-            )
+                f"swaps:            {self.swap_collisions}\n"
+                f"waiting steps:    {self.wait_steps}")
 
     def _snapshot(self, collisions: list[Cell]) -> Frame:
         robots = [RobotSnapshot(r.id, r.pos, r.state, r.goal(), list(r.path)) for r in self.robots]
