@@ -1,7 +1,8 @@
 """Watch the fleet, or save a side-by-side GIF.
 
-    python make_gif.py            # live window: coordinated fleet
-    python make_gif.py --compare  # live window: plain A* (crashing) vs space-time A*
+    python make_gif.py                         # live window: coordinated fleet
+    python make_gif.py --planner plain         # live window: plain A*, robots crash
+    python make_gif.py --compare               # both side by side
     python make_gif.py --compare --save results/compare.gif
 """
 import argparse
@@ -35,17 +36,20 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--no-parking", dest="parking", action="store_false",
                         help="idle robots stay where they stop (needs a map without enough P cells)")
+    parser.add_argument("--planner", choices=["plain", "spacetime"], default="spacetime",
+                        help="plain: every robot plans alone with A* (crashes). spacetime: coordinated")
     parser.add_argument("--compare", action="store_true", help="show plain A* next to space-time A*")
     parser.add_argument("--save", help="save a GIF to this path instead of opening a window")
     args = parser.parse_args()
 
     world = World.from_file(args.map)
     runs = []
-    if args.compare:
+    if args.compare or args.planner == "plain":
         naive = run(plan_independent, args, world)
         runs.append(("Plain A* (robots ignore each other)", naive.frames))
-    smart = run(plan_prioritized, args, world)
-    runs.append(("Space-time A* + reservations", smart.frames))
+    if args.compare or args.planner == "spacetime":
+        smart = run(plan_prioritized, args, world)
+        runs.append(("Space-time A* + reservations", smart.frames))
 
     animate(world, runs, out=args.save)
 

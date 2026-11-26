@@ -1,7 +1,9 @@
 """Draw simulator frames with matplotlib: live in a window, or saved as a GIF."""
+import math
+
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Circle, Polygon, Rectangle
 
 from fleet.robot import State
 from fleet.simulator import Frame
@@ -16,6 +18,43 @@ PICKUP_COLOR = "#e8952f"
 COLLISION_COLOR = "#d62728"
 ROBOT_COLORS = ["#1f77b4", "#9467bd", "#2a9d8f", "#e377c2", "#8c564b",
                 "#bcbd22", "#393b79", "#7f7f7f", "#17becf", "#6b8e23"]
+
+
+EXPLOSION_STEPS = 2.0      # how many time steps an explosion stays on screen
+
+
+def _starburst(x, y, radius, spikes=12, inner=0.45, twist=0.0):
+    """Points of a jagged star centred on (x, y)."""
+    pts = []
+    for i in range(spikes * 2):
+        r = radius if i % 2 == 0 else radius * inner
+        a = math.pi * i / spikes + twist
+        pts.append((x + r * math.cos(a), y + r * math.sin(a)))
+    return pts
+
+
+def _draw_explosion(ax, cell, age):
+    """Explosion at `cell`, `age` time steps after the crash: grows fast, then fades out."""
+    x, y = _xy(cell)
+    grow = min(age / 0.5, 1.0)                     # full size after half a step
+    fade = max(0.0, 1.0 - age / EXPLOSION_STEPS)
+    size = 0.35 + 0.55 * grow
+    layers = [  # (scale, colour, twist): red outside, yellow inside, white-hot core
+        (1.00, "#d62728", 0.0),
+        (0.72, "#ff7f0e", 0.26),
+        (0.45, "#ffd23f", 0.0),
+        (0.20, "#fffbe6", 0.26),
+    ]
+    artists = []
+    for scale, color, twist in layers:
+        star = Polygon(_starburst(x, y, size * scale, twist=twist + age), closed=True,
+                       facecolor=color, edgecolor="none", alpha=fade, zorder=9, clip_on=False)
+        ax.add_patch(star)
+        artists.append(star)
+    if age < 1.2:
+        artists.append(ax.text(x, y - size - 0.15, "CRASH!", ha="center", va="bottom",
+                               fontsize=9, fontweight="bold", color="#d62728", alpha=fade, zorder=10, clip_on=False))
+    return artists
 
 
 def _xy(cell):
@@ -96,12 +135,14 @@ class _Panel:
                 self.dynamic.append(ax.text(x, y, str(s.id), ha="center", va="center",
                                             fontsize=8, color="white", fontweight="bold", zorder=6))
 
-        # Collisions that happen on the way to the next step: red rings
-        for cell in nxt.collisions if alpha > 0.5 else []:
-            cx, cy = _xy(cell)
-            ring = Circle((cx, cy), 0.48, fill=False, edgecolor=COLLISION_COLOR, linewidth=3, zorder=7)
-            ax.add_patch(ring)
-            self.dynamic.append(ring)
+        # Explosions: each crash happens halfway through a move, then stays on screen for a bit
+        now = step + alpha
+        first = max(1, int(now - EXPLOSION_STEPS))
+        for k in range(first, min(step + 2, len(self.frames))):
+            age = now - (k - 0.5)
+            if 0 <= age < EXPLOSION_STEPS:
+                for cell in set(self.frames[k].collisions):
+                    self.dynamic += _draw_explosion(ax, cell, age)
 
         shown = nxt if alpha > 0.5 else cur
         collisions = self.collision_count[min(step + (alpha > 0.5), len(self.frames) - 1)]
